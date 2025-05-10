@@ -1,0 +1,237 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flappy Bird Final</title>
+  <style>
+    canvas {
+      border: 1px solid #000;
+      display: block;
+      margin: 20px auto;
+    }
+    #retryButton, #pauseButton {
+      position: absolute;
+      padding: 10px 20px;
+      background-color: #e74c3c;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: none;
+    }
+    #retryButton {
+      top: 60%;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    #pauseButton {
+      top: 45px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <script>
+    let birdY, birdSpeed, birdSize;
+    let pipes = [];
+    let score = 0, timer = 0, lives = 3;
+    let gameEnded = false;
+    let isPaused = false;
+    let baseSpeed = 2;
+    let pipeSpeed = baseSpeed;
+    let speedMultiplier = 1;
+    let maxSpeed = 10;
+    let pipeGap = 250; // horizontal gap
+    let lastPipeX = 0;
+
+    function setup() {
+      let cnv = createCanvas(600, 400);
+      cnv.parent(document.body);
+      cnv.mousePressed(() => {
+        if (!gameEnded && !isPaused) birdSpeed = -5;
+      });
+      resetGame();
+      document.getElementById("pauseButton").style.display = "block";
+    }
+
+    function draw() {
+      drawSunsetBackground();
+
+      if (!gameEnded) {
+        if (!isPaused) {
+          if (frameCount % 60 === 0) timer++;
+
+          birdY += birdSpeed;
+          birdSpeed += 0.2;
+
+          if (pipes.length === 0 || width - pipes[pipes.length - 1].x >= pipeGap) {
+            // Ensure both pipes are always visible
+            let pipeHeight = random(50, height - 150 - 50); // gap = 150
+            pipes.push({ x: width, height: pipeHeight, passed: false, hit: false, visible: true });
+          }
+
+          for (let i = pipes.length - 1; i >= 0; i--) {
+            pipes[i].x -= pipeSpeed;
+            if (pipes[i].x < -60) pipes.splice(i, 1);
+          }
+
+          let birdRect = { x: width / 2, y: birdY, w: birdSize, h: birdSize };
+
+          for (let p of pipes) {
+            let topPipe = { x: p.x, y: 0, w: 50, h: p.height };
+            let bottomPipe = { x: p.x, y: p.height + 150, w: 50, h: height - p.height - 150 };
+
+            if (!p.hit && p.visible && (checkCollision(birdRect, topPipe) || checkCollision(birdRect, bottomPipe))) {
+              p.hit = true;
+              p.visible = false;
+              lives--;
+              birdY = height / 2;
+              birdSpeed = 0;
+              if (lives <= 0) endGame();
+            }
+
+            if (!p.passed && p.x + 50 < birdRect.x) {
+              p.passed = true;
+              score++;
+              pipeSpeed = min(baseSpeed * speedMultiplier, maxSpeed);
+              speedMultiplier *= 1.05;
+              if (pipeSpeed >= maxSpeed) {
+                speedMultiplier = 1;
+                pipeSpeed = baseSpeed;
+              }
+            }
+          }
+
+          if (birdY + birdSize >= height || birdY <= 0) {
+            lives--;
+            birdY = height / 2;
+            birdSpeed = 0;
+            if (lives <= 0) endGame();
+          }
+        }
+
+        let birdRect = { x: width / 2, y: birdY, w: birdSize, h: birdSize };
+        drawBird(birdRect);
+        drawPipes();
+      } else {
+        fill(0);
+        textSize(26);
+        textAlign(CENTER, CENTER);
+        text(`Game Over!\nScore: ${score}\nTime: ${timer}s`, width / 2, height / 2 - 40);
+      }
+
+      drawScore();
+      drawTimer();
+      drawSpeed();
+      drawHearts();
+    }
+
+    function drawSunsetBackground() {
+      for (let y = 0; y < height; y++) {
+        let r = map(y, 0, height, 255, 255);
+        let g = map(y, 0, height, 94, 165);
+        let b = map(y, 0, height, 77, 255);
+        stroke(r, g, b);
+        line(0, y, width, y);
+      }
+    }
+
+    function drawBird(birdRect) {
+      push();
+      translate(birdRect.x + birdRect.w / 2, birdRect.y + birdRect.h / 2);
+      fill(255, 204, 0); ellipse(0, 0, 30, 30);
+      let wingAngle = sin(frameCount * 0.3) * 10;
+      fill(200, 160, 0);
+      push(); rotate(radians(wingAngle)); ellipse(0, 0, 18, 8); pop();
+      fill(0); ellipse(7, -5, 5, 5); pop();
+    }
+
+    function drawPipes() {
+      fill(0, 128, 0);
+      for (let p of pipes) {
+        if (p.visible) {
+          rect(p.x, 0, 50, p.height);
+          rect(p.x - 5, p.height - 10, 60, 10);
+          rect(p.x, p.height + 150, 50, height - p.height - 150);
+          rect(p.x - 5, p.height + 150, 60, 10);
+        }
+      }
+    }
+
+    function drawScore() {
+      fill(0);
+      textSize(16);
+      textAlign(LEFT, TOP);
+      text("Score: " + score, 10, 10);
+    }
+
+    function drawTimer() {
+      fill(0);
+      textSize(16);
+      text("Time: " + timer + "s", 10, 30);
+    }
+
+    function drawSpeed() {
+      fill(0);
+      textSize(16);
+      text(`Speed: ${pipeSpeed.toFixed(2)}`, 10, 50);
+    }
+
+    function drawHearts() {
+      fill(255, 0, 0);
+      for (let i = 0; i < lives; i++) {
+        drawHeart(500 + i * 30, 20, 10);
+      }
+    }
+
+    function drawHeart(x, y, size) {
+      beginShape();
+      vertex(x, y);
+      bezierVertex(x - size, y - size, x - size * 1.5, y + size / 2, x, y + size);
+      bezierVertex(x + size * 1.5, y + size / 2, x + size, y - size, x, y);
+      endShape(CLOSE);
+    }
+
+    function checkCollision(a, b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function endGame() {
+      gameEnded = true;
+      document.getElementById("retryButton").style.display = "block";
+    }
+
+    function restartGame() {
+      resetGame();
+      document.getElementById("retryButton").style.display = "none";
+    }
+
+    function resetGame() {
+      birdY = height / 2;
+      birdSpeed = 0;
+      birdSize = 30;
+      pipes = [];
+      score = 0;
+      timer = 0;
+      lives = 3;
+      pipeSpeed = baseSpeed;
+      speedMultiplier = 1;
+      gameEnded = false;
+      isPaused = false;
+      document.getElementById("pauseButton").innerText = "Pause";
+    }
+
+    function togglePause() {
+      if (gameEnded) return;
+      isPaused = !isPaused;
+      document.getElementById("pauseButton").innerText = isPaused ? "Resume" : "Pause";
+    }
+  </script>
+
+  <div id="retryButton" onclick="restartGame()">Replay</div>
+  <div id="pauseButton" onclick="togglePause()">Pause</div>
+</body>
+</html>
